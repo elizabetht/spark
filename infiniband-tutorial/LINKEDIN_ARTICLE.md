@@ -1,70 +1,72 @@
-# RoCE vs InfiniBand: Benchmarking Two DGX Sparks
+# Benchmarking Two DGX Sparks: RoCE ≠ InfiniBand
 
-Two DGX Spark boxes on the bench. Connected with what looked like InfiniBand cables. Ran the tests everyone talks about but few actually show. Plot twist: it's actually RoCE. Here's what came out—and why that distinction matters less than you'd think.
+Two DGX Spark boxes on the bench. Cables that *look* like InfiniBand. Benchmarks that everyone talks about but few actually run. And a plot twist: those cables? RoCE, not InfiniBand.
+
+Here's what the numbers look like—and why that distinction matters less than you'd think.
 
 ---
 
-## First, What's the Deal with RDMA?
+## Wait, What's RDMA Again?
 
-Here's the thing about regular networking—Ethernet, WiFi, whatever—the CPU handles every single packet. Data comes in, CPU gets interrupted, CPU copies it to memory, CPU tells your application about it. Do this a few thousand times a second and your CPU is spending more time playing mailman than doing actual work.
+Traditional networking (Ethernet, WiFi, you name it) has an inefficiency baked right in. Every packet that arrives? CPU has to stop what it's doing, copy the data, tell your app about it. Rinse and repeat thousands of times per second. The CPU becomes a glorified mail sorter.
 
-InfiniBand flips this around. The network card writes directly into your application's memory. No CPU involved. They call this RDMA—Remote Direct Memory Access. Sounds like marketing speak until you see the latency numbers: 1-2 microseconds versus 50-200 for Ethernet. That's not 2x faster. That's 50-100x.
+RDMA flips that model. The network card writes directly into your app's memory. CPU never knows it happened. The latency difference is significant—1-2 microseconds vs 50-200μs for regular Ethernet. That's not a 2x improvement, that's 50-100x.
 
-For inference at scale, this matters more than you'd think. Multi-GPU serving means GPUs constantly passing KV-caches, attention states, and intermediate activations between each other. Every request, multiple times. Every microsecond the network adds shows up directly in your latency metrics.
+Why care? Well, multi-GPU inference means GPUs constantly shuffling KV-caches and attention states around. Every. Single. Request. Those microseconds add up fast.
 
-## Plot Twist: DGX Spark Uses RoCE, Not InfiniBand
+## The Plot Twist Nobody Mentions
 
-Here's something confusing at first. Running `ibv_devinfo` showed device names like `roceP2p1s0f0`. That `roce` prefix is the giveaway—this is **RoCE (RDMA over Converged Ethernet)**, not native InfiniBand.
+Poking around, running `ibv_devinfo`, and the devices are named `roceP2p1s0f0`. Huh. That "roce" bit is the tell—this is **RoCE (RDMA over Converged Ethernet)**, not actual InfiniBand.
 
-Same RDMA benefits (zero-copy, kernel-bypass, microsecond latency), but running over Ethernet hardware instead of an InfiniBand fabric. The ConnectX adapters support both modes.
+Same RDMA goodness (zero-copy, kernel-bypass, crazy low latency), just running over Ethernet instead of a dedicated InfiniBand fabric. The ConnectX cards can do both.
 
-**Why does this matter?**
+**Does it actually matter though?**
 
-Honestly, for most workloads—it doesn't. The `ib_write_bw` and NCCL tests work identically. The performance is the same. NCCL doesn't care whether the underlying transport is InfiniBand or RoCE; it just sees RDMA.
+For day-to-day stuff? Nah. The `ib_write_bw` tests work the same. NCCL doesn't care—it just sees RDMA and goes "cool."
 
-**Where it does matter:**
+**When it DOES matter:**
 
-- **Switching**: InfiniBand requires InfiniBand switches. RoCE uses standard Ethernet switches you probably already have.
-- **Configuration**: InfiniBand has lossless flow control built in. RoCE needs Priority Flow Control (PFC) and ECN configured on your switches. Get this wrong, and performance tanks.
-- **Scale**: Native InfiniBand fabrics can be more predictable at massive scale. RoCE is fine for rack-scale deployments.
+- **Switches**: InfiniBand needs InfiniBand switches (expensive). RoCE works with the Ethernet switches you already own.
+- **Config headaches**: InfiniBand has lossless flow control baked in. RoCE needs PFC and ECN configured on your switches. Mess it up and performance tanks.
+- **Scale**: At massive scale (think datacenter-wide), native InfiniBand is more predictable. RoCE is fine for a rack or two.
 
-Cloud providers typically offer native InfiniBand on the serious GPU instances (H100/B200 clusters) and RoCE on everything else. DGX Spark falls into the RoCE category—which is totally fine for most inference workloads.
+Big cloud providers give you real InfiniBand on the beefy GPU instances (H100/B200 clusters). Everything else gets RoCE. DGX Spark is in the "everything else" bucket, which is honestly fine.
 
 ---
 
 ## The Setup
 
-Two DGX Sparks, one cable between them. No switch, no special configuration. Just a direct connection.
+Dead simple: two DGX Sparks, one cable between them. No switch. No fancy config. Direct connection.
 
-One thing worth noting—the interfaces don't show up as `ib0` like the old documentation says. Modern kernels use predictable naming, so they appeared as `enp1s0f0np0` and `enp1s0f1np1`. And the device names in `ibv_devinfo` showed `roceP2p1s0f0`—confirming this is RoCE, not native InfiniBand. Same tools work though.
+One gotcha—the interfaces aren't called `ib0` like all the old docs say. Newer kernels use "predictable naming" so they show up as `enp1s0f0np0` and `enp1s0f1np1`. Not exactly intuitive. The `ibv_devinfo` output with `roceP2p1s0f0` confirms it's RoCE. Tools still work the same though.
 
 ---
 
-## What the Numbers Actually Look Like
+## Actual Numbers (The Fun Part)
 
 **Test 1: Raw RDMA bandwidth**
 
 ```bash
-# One machine runs the server
+# Machine 1 (server)
 ib_write_bw
 
-# Other machine connects to it  
+# Machine 2 (client)
 ib_write_bw 192.168.100.11
 ```
 
-The output shows `BW average[MB/sec]`. Results showed around 12,000 MB/sec, which works out to roughly 96 Gbps. (Divide by 125 to convert—benchmarks use Bytes, specs use bits.)
+Result: ~12,000 MB/sec in the `BW average[MB/sec]` column. That's roughly 96 Gbps. (Divide by 125 to convert—benchmarks use Bytes, marketing uses bits, because of course they do.)
 
-**Quick note on RDMA test types:** There's `ib_write_bw`, `ib_send_bw`, and `ib_read_bw`. The difference is how RDMA moves the data. Write is one-sided—the sender writes directly to the receiver's memory without the receiver's CPU knowing. Send is two-sided—the receiver has to post receive buffers first and gets notified when data arrives. For validating that InfiniBand is working, `ib_write_bw` is the standard choice. It shows raw hardware capability without any protocol overhead. Both should hit near line-rate anyway.
+**Nerdy sidebar on RDMA tests:** There's `ib_write_bw`, `ib_send_bw`, and `ib_read_bw`. Write is one-sided—sender writes directly to receiver's memory, receiver's CPU has no clue. Send is two-sided—receiver posts buffers first, gets notified when data lands. For "is this thing working?" tests, `ib_write_bw` is what everyone uses.
 
-**Test 2: TCP over the same link**
+**Test 2: TCP over the same cable**
 
-Running iperf3 over the same link showed 35 Gbps.
+Ran iperf3 on the same link. Got 35 Gbps.
 
-Wait, what? Same cable, same hardware, but a third of the speed?
+Wait, what? Same cable. Same hardware. A third of the speed?!
 
-This is actually correct. iperf3 uses TCP/IP, which means it goes through the kernel's networking stack, then through an IPoIB (IP-over-InfiniBand) translation layer, then finally to the hardware. All that overhead costs 60-70% of your bandwidth.
+Turns out this is totally normal. iperf3 uses TCP/IP, which means kernel networking stack → IPoIB translation layer → finally the hardware. All that overhead eats 60-70% of your bandwidth.
 
-The important part: inference frameworks like vLLM, TensorRT-LLM, and TGI use NCCL for GPU communication, and NCCL uses native RDMA. Actual serving workloads see the full 96 Gbps, not the 35.
+Good news: vLLM, TensorRT-LLM, TGI—they all use NCCL, and NCCL uses raw RDMA. Real workloads see the full 96 Gbps.
 
 **Test 3: Latency**
 
@@ -73,80 +75,82 @@ ib_write_lat  # server
 ib_write_lat 192.168.100.11  # client
 ```
 
-Look for `t_avg` in the output. Should be 1-2 microseconds. Ethernet ping on the same network? 50-200 microseconds.
+Check `t_avg` in the output. Should see 1-2 microseconds. A regular ping over Ethernet? 50-200μs. Yeah.
 
 **Test 4: Adding a second cable**
 
-Starting with one cable between ports, DGX Spark has two RoCE ports, so plugging in a second cable doubles the available bandwidth.
+DGX Spark has two RoCE ports. Plugging in a second cable doubles the available bandwidth.
 
-Each link still runs at ~12,000 MB/sec individually. But now workloads can use both simultaneously—aggregate bandwidth doubles to ~24,000 MB/sec. Latency stays the same; individual messages aren't faster, just more parallel traffic is possible.
+Each link still does ~12,000 MB/sec on its own. But now there's double the aggregate bandwidth (~24,000 MB/sec). Latency stays the same—individual messages aren't faster, just more lanes available.
 
 NCCL figures this out automatically. No code changes needed.
 
-**Test 5: NCCL All-Reduce (the real test)**
+**Test 5: NCCL All-Reduce (what actually matters)**
 
-All the tests above measure raw network performance. But inference frameworks don't talk to the network directly—they use NCCL (NVIDIA Collective Communications Library). Testing NCCL directly shows what actual workloads will achieve.
+All the above tests the raw network. But real inference code uses NCCL. So testing that directly:
 
 ```bash
-# Multi-node NCCL test with mpirun
+# Multi-node NCCL test
 mpirun -np 4 --host node1:2,node2:2 \
     -x NCCL_DEBUG=INFO \
     -x NCCL_IB_DISABLE=0 \
     all_reduce_perf -b 8 -e 128M -f 2 -g 1
 ```
 
-**What to look for:**
+**What you're looking for:**
 
-First, check the NCCL_DEBUG output. The line you want to see:
+In the NCCL_DEBUG output, find this line:
 ```
 NCCL INFO NET/IB : Using [0]mlx5_0:1/IB
 ```
 
-That `NET/IB` means NCCL found the RDMA interface and is using it. If you see `NET/Socket` instead, it's falling back to TCP—something's wrong.
+`NET/IB` = good, it found RDMA. `NET/Socket` = bad, it's using TCP as fallback. Go fix something.
 
-Second, look at the `busbw` column in the results. For 128MB messages over RDMA, expect 20-40 GB/s. Stuck below 5 GB/s even for large messages? NCCL isn't using the RDMA link.
+Then check the `busbw` column. For 128MB messages you want 20-40 GB/s. Stuck under 5 GB/s? RDMA isn't being used.
 
-The confusing part about these tests: small messages show low bandwidth. That's normal—they're latency-bound. The bandwidth numbers only matter for messages above 1MB or so.
+Small messages showing low bandwidth? That's normal—they're latency-bound. Bandwidth only matters for big messages (1MB+).
 
 ---
 
-## Why This Matters for LLM Inference
+## Why This Matters (LLM Stuff)
 
-**Tensor parallelism** - Large models like Llama 70B or Mixtral don't fit on one GPU. Split them across 4 or 8 GPUs, and suddenly every forward pass requires all-reduce operations. At 1-2 microseconds per hop, the network is invisible. At 200 microseconds, milliseconds get added to every token generated.
+**Tensor parallelism** - Llama 70B doesn't fit on one GPU. Split it across 4 or 8, and now every forward pass needs all-reduce ops. At 1-2μs per hop, the network is basically invisible. At 200μs? That's milliseconds added per token. Ouch.
 
-**KV-cache movement** - Long context windows mean large KV-caches. Continuous batching means these caches need to move around as requests get scheduled. Slow interconnect = cache transfer becomes the bottleneck.
+**KV-cache shuffling** - Long contexts = big KV-caches. Continuous batching = caches moving around constantly. Slow network = bottleneck city.
 
-**Disaggregated serving** - Separating prefill (compute-heavy) from decode (memory-bound) across different node pools is becoming standard practice. The KV-cache has to move between them after prefill completes. With RDMA, this transfer takes microseconds. With Ethernet, tens of milliseconds get added before the first token even starts generating.
+**Disaggregated serving** - Separating prefill from decode on different nodes is becoming standard. KV-cache has to move between them. RDMA = microseconds. Ethernet = tens of milliseconds before the first token even starts. Users notice.
 
-**Time-to-first-token (TTFT)** - Users notice latency. Every hop through the serving stack adds up. RDMA makes inter-GPU communication essentially free from a latency perspective.
+**TTFT** - Time-to-first-token is what users actually feel. Every hop adds up. RDMA makes GPU-to-GPU comms basically free from a latency perspective.
 
 ---
 
 ## Common Gotchas
 
-**iperf3 wouldn't start** - "Address already in use." The default port was taken. Adding `-p 5202` fixes it.
+**iperf3 wouldn't start** - "Address already in use." Something else was on the default port. `-p 5202` fixed it.
 
-**Interface names were wrong** - Looking for `ib0` when modern systems name them differently. `ibstat` shows the actual port status regardless of what the interface is called.
+**Couldn't find `ib0`** - Because it doesn't exist anymore. Modern systems name interfaces differently. `ibstat` shows port status regardless of the weird interface names.
 
-**iperf3 results looked broken** - 35 Gbps on a 100G link felt wrong. It's not. Different protocol, different overhead. The RDMA tests show true hardware capability.
-
----
-
-## Commands Worth Remembering
-
-`ibstat` - Shows port status. Look for "State: Active"
-
-`ib_write_bw` / `ib_write_lat` - Native RDMA tests. These show real InfiniBand performance.
-
-`iperf3` - TCP bandwidth test. Useful for comparison but doesn't reflect what NCCL will achieve.
+**iperf3 numbers seemed broken** - 35 Gbps on a "100G" link felt wrong. It's not. Different protocol, different overhead. The RDMA tests show what the hardware can actually do.
 
 ---
 
-## Bottom Line
+## Cheat Sheet
 
-Running `ib_write_bw` showed 12,000 MB/sec sustained. The same test over regular TCP: lucky to hit 1,200 MB/sec. That's not a small difference. That's the difference between the interconnect being a bottleneck and being invisible.
+`ibstat` - Is this thing on? Look for "State: Active"
 
-For LLM inference, the latency gap is what kills you. 1-2 microseconds versus 50-200 microseconds. Running a 70B model across 8 GPUs with tensor parallelism means every token generation involves multiple all-reduce operations. That latency multiplies fast.
+`ib_write_bw` / `ib_write_lat` - Raw RDMA performance tests
+
+`iperf3` - TCP test. Useful for comparison but not what NCCL uses
+
+---
+
+## TL;DR
+
+`ib_write_bw` showed 12,000 MB/sec. Same test over TCP: maybe 1,200 MB/sec on a good day. That's not a small gap—that's the difference between the network being a problem and being invisible.
+
+For LLM inference, the latency gap hurts more. 1-2μs vs 50-200μs. Running a 70B model across 8 GPUs with tensor parallelism means every token gen does multiple all-reduces. Those microseconds stack up real quick.
+
+Hit up the comments if you're also messing around with DGX Spark—always good to compare notes.
 
 Whether it's native InfiniBand or RoCE (like on DGX Spark), the RDMA magic is what matters. Building inference infrastructure and wondering whether RDMA networking is worth it? Run these tests. The numbers speak for themselves.
 

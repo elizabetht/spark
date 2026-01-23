@@ -144,6 +144,27 @@ Use tables when comparing more than 2 items on more than 2 dimensions. Otherwise
 
 ---
 
+## Tone Guidelines
+
+**Voice:** Direct and readable with clean language.
+
+**Do:**
+- Use straightforward, professional language
+- Keep sentences punchy and scannable
+- Let data and examples do the convincing
+- Write like you're explaining to a sharp colleague
+
+**Avoid:**
+- Profanity or crude language ("screw that", "goes to hell", etc.)
+- Excessive slang ("cool kids", "duh")
+- Emoji in technical content
+- Filler phrases that don't add information
+- Overly casual throwaway lines
+
+**The goal:** Sound like a competent engineer sharing findings—not a marketing deck, not a Reddit post.
+
+---
+
 ## Checklist Before Publishing
 
 - [ ] Does the opening sentence contain actual information?
@@ -152,6 +173,7 @@ Use tables when comparing more than 2 items on more than 2 dimensions. Otherwise
 - [ ] Can someone skim the headers and get the main points?
 - [ ] Would I share this with a skeptical colleague?
 - [ ] Did I cut every sentence that's just "filling space"?
+- [ ] Is the language clean and professional throughout?
 
 ---
 
