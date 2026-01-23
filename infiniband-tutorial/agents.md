@@ -1,33 +1,57 @@
-# Content Writing Guidelines for Technical Leaders
+# AGENTS.md — Guidelines for AI Assistants
 
-## Purpose
-
-This document captures guidelines for writing technical content aimed at hiring managers, senior directors, and technical leadership at LLM inference companies. The goal is authentic, direct communication that respects the reader's time and intelligence.
+This document provides instructions for AI agents working on this repository. The goal is to maintain a professional, technical tone and ensure content is accessible to the target audience.
 
 ---
 
-## Audience Profile
+## Project Overview
 
-**Who they are:**
-- Hiring managers evaluating candidates with infrastructure experience
-- Senior directors making technology investment decisions
+**DGX Spark Network Benchmarks** is a LinkedIn article documenting RDMA (Remote Direct Memory Access) performance testing between two direct-connected DGX Spark systems using RoCE (RDMA over Converged Ethernet).
+
+### Content Focus
+- RDMA vs TCP/IP performance comparison
+- RoCE vs native InfiniBand clarification
+- NCCL collective benchmarks
+- Practical implications for LLM inference
+
+### Project Structure
+```
+infiniband-tutorial/
+├── LINKEDIN_ARTICLE.md    # Main article content
+├── 01_InfiniBand_Tutorial.ipynb  # Hands-on notebook
+├── README.md              # Repository overview
+└── agents.md              # This file (AI guidelines)
+```
+
+---
+
+## 🎯 Target Audience
+
+### Who We're Writing For
+
+**Hiring managers, technical leadership, and software engineers with infrastructure/backend backgrounds.**
+
+They are:
+- Experienced with systems, networking, and distributed infrastructure
+- Familiar with: load balancers, caching, databases, APIs, Kubernetes
+- Evaluating candidates or making technology investment decisions
 - Technical leaders at LLM inference companies (TensorRT-LLM, vLLM, etc.)
-- People who've seen enough marketing to recognize fluff instantly
+- People who recognize marketing fluff instantly
 
-**What they care about:**
+### What They Care About
 - Does this actually work?
 - What are the real numbers?
 - What tradeoffs should I know about?
 - Can this person execute?
 
-**What they don't care about:**
-- Buzzwords
+### What They Don't Care About
+- Buzzwords and superlatives
 - Vague promises
 - Over-explained basics they already know
 
 ---
 
-## Writing Principles
+## ✍️ Writing Style Guidelines
 
 ### 1. Lead with Data, Not Claims
 
@@ -103,7 +127,7 @@ Uncertainty stated clearly is more credible than false confidence.
 
 ---
 
-## Formatting Conventions
+## 🔧 Formatting Conventions
 
 ### Numbers and Units
 
@@ -131,7 +155,7 @@ Use tables when comparing more than 2 items on more than 2 dimensions. Otherwise
 
 ---
 
-## Common Anti-Patterns to Avoid
+## 🚫 Anti-Patterns to Avoid
 
 | Anti-Pattern | Why It Fails | Fix |
 |--------------|--------------|-----|
@@ -141,31 +165,59 @@ Use tables when comparing more than 2 items on more than 2 dimensions. Otherwise
 | "It's important to note that..." | Filler | State the fact directly |
 | Excessive emoji | Unprofessional for this audience | Use sparingly or not at all |
 | Rhetorical questions | Often feel manipulative | Make statements instead |
+| "Simple" or "just" | Dismissive of complexity | Describe what actually happens |
 
 ---
 
-## Tone Guidelines
+## 🎨 Tone Guidelines
 
-**Voice:** Direct and readable with clean language.
+**Voice:** Professional and technical. Write for engineers and technical leadership.
 
 **Do:**
-- Use straightforward, professional language
-- Keep sentences punchy and scannable
-- Let data and examples do the convincing
-- Write like you're explaining to a sharp colleague
+- Use clear, precise technical language
+- State facts directly without hedging
+- Let data and measurements speak for themselves
+- Write complete sentences with proper structure
+- Maintain a formal but readable tone
 
 **Avoid:**
-- Profanity or crude language ("screw that", "goes to hell", etc.)
-- Excessive slang ("cool kids", "duh")
+- Colloquialisms and casual expressions ("Nah", "Yeah", "cool", "gotcha")
+- Rhetorical questions as section headers ("Wait, What's RDMA Again?")
+- Exclamation marks and dramatic phrasing
+- Profanity or crude language
+- Emdashes (use colons, periods, or commas instead)
 - Emoji in technical content
-- Filler phrases that don't add information
-- Overly casual throwaway lines
+- Filler phrases ("Turns out", "The fun part", "Ouch")
+- Sentence fragments for effect
 
-**The goal:** Sound like a competent engineer sharing findings—not a marketing deck, not a Reddit post.
+**Example transformation:**
+
+Before (casual):
+> Wait, what? Same cable. Same hardware. A third of the speed?! Turns out this is totally normal.
+
+After (professional):
+> This is expected behavior. iperf3 uses TCP/IP, which traverses the kernel networking stack and IPoIB translation layer. The overhead consumes 60-70% of available bandwidth.
+
+**The goal:** Sound like a technical whitepaper or engineering blog from a respected company. Clear, precise, informative.
 
 ---
 
-## Checklist Before Publishing
+## 📝 Acronym Usage
+
+**Expand acronyms on first use.** The first time an acronym appears, include the full term in parentheses.
+
+**Examples:**
+- RDMA (Remote Direct Memory Access)
+- RoCE (RDMA over Converged Ethernet)
+- GPU (Graphics Processing Unit)
+- NCCL (NVIDIA Collective Communications Library)
+- TCP/IP (Transmission Control Protocol/Internet Protocol)
+
+After the first expansion, use the acronym alone. This respects readers who know the terms while ensuring clarity for those encountering them for the first time.
+
+---
+
+## 📋 Checklist Before Publishing
 
 - [ ] Does the opening sentence contain actual information?
 - [ ] Are all claims backed by specific data or commands?
@@ -174,10 +226,11 @@ Use tables when comparing more than 2 items on more than 2 dimensions. Otherwise
 - [ ] Would I share this with a skeptical colleague?
 - [ ] Did I cut every sentence that's just "filling space"?
 - [ ] Is the language clean and professional throughout?
+- [ ] Are acronyms expanded on first use?
 
 ---
 
-## Example Transformation
+## 💡 Example Transformation
 
 **Before (AI-sounding):**
 > InfiniBand technology represents a paradigm shift in high-performance computing infrastructure. By leveraging RDMA capabilities, organizations can achieve unprecedented levels of performance that were previously thought impossible. This article will walk you through the transformative journey of implementing InfiniBand in your AI infrastructure.
