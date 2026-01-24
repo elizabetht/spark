@@ -88,7 +88,7 @@ DGX Spark has two RoCE ports. Adding a second cable doubles aggregate bandwidth 
 
 NCCL automatically utilizes both links without configuration changes.
 
-**Test 5: NCCL Collectives**
+**Test 5: GPU-to-GPU Communication**
 
 The above tests measure raw network performance. Production code uses NCCL, which warrants direct testing with the nccl-tests suite. See NVIDIA's [NCCL Stacked Sparks playbook](https://build.nvidia.com/spark/nccl/stacked-sparks) for setup instructions.
 
