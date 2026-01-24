@@ -104,36 +104,48 @@ The above tests measure raw network performance. Production code uses NCCL, whic
 
 For this benchmark, `all_gather_perf` was used:
 
+`mpirun` launches the test across both nodes from a single command. It SSHes to each host, starts the NCCL test process, and coordinates execution. Run from one machine only (e.g., spark-01); mpirun handles the remote process on spark-02.
+
 ```bash
-mpirun -np 2 \
-    -H 192.168.200.12:1,192.168.200.13:1 \
-    --mca btl_tcp_if_include enp1s0f1np1 \
-    --mca oob_tcp_if_include enp1s0f1np1 \
+mpirun -np 2 -H 192.168.200.12:1,192.168.200.13:1 \
+    --mca plm_rsh_agent "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no" \
+    -x LD_LIBRARY_PATH=$LD_LIBRARY_PATH \
     -x NCCL_DEBUG=INFO \
-    -x NCCL_SOCKET_IFNAME=enp1s0f1np1 \
-    all_gather_perf -b 8 -e 128M -f 2 -g 1
+    $HOME/src/github.com/NVIDIA/nccl-tests/build/all_gather_perf
 ```
 
-**Command options:**
+**Key indicators from NCCL_DEBUG output:**
 
-| Option | Meaning |
-|--------|---------|
-| `-np 2` | Total number of MPI (Message Passing Interface) processes (1 per GPU across both nodes) |
-| `-H host:n` | Run n processes on each host |
-| `-x VAR` | Export environment variable to remote processes |
-| `-b 8` | Start message size (8 bytes) |
-| `-e 128M` | End message size (128 MB) |
-| `-f 2` | Step factor: multiply size by 2 each iteration |
-| `-g 1` | GPUs per process |
+| Indicator | What to look for | Status |
+|-----------|------------------|--------|
+| GPU detection | Both ranks show `NVIDIA GB10` | ✓ Both nodes detected |
+| Transport | `NET/IB` with RoCE interfaces | ✓ RDMA active (not TCP fallback) |
+| Channels | `via NET/IB/4`, `via NET/IB/5` | ✓ Multiple RDMA channels |
+| Bandwidth | busbw ~16 GB/s (32 MB), ~22 GB/s (16 GB) | ✓ Expected for dual 100G links |
 
-**Key indicators:**
+If NCCL shows `NET/Socket` instead of `NET/IB`, it's falling back to TCP—troubleshooting required.
 
-In NCCL_DEBUG output, verify transport selection:
+**Large message test (16 GB):**
+
+For maximum throughput measurement, testing with larger messages reduces per-message overhead:
+
+```bash
+mpirun -np 2 -H 192.168.200.12:1,192.168.200.13:1 \
+    --mca plm_rsh_agent "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no" \
+    -x LD_LIBRARY_PATH=$LD_LIBRARY_PATH \
+    -x NCCL_DEBUG=INFO \
+    $HOME/src/github.com/NVIDIA/nccl-tests/build/all_gather_perf -b 16G -e 16G -f 2
 ```
-NCCL INFO NET/IB : Using [0]rocep1s0f0:1/RoCE [1]rocep1s0f1:1/RoCE
+
+Result:
+```
+#       size      time   algbw   busbw
+#        (B)      (us)  (GB/s)  (GB/s)
+ 17179869184   387603   44.32   22.16
+# Avg bus bandwidth    : 21.9736
 ```
 
-`NET/IB` confirms RDMA is active. `NET/Socket` indicates TCP fallback, which requires troubleshooting.
+With 16 GB messages, busbw reaches ~22 GB/s, demonstrating the full potential of dual 100G RoCE links working together.
 
 **Understanding the output columns:**
 
