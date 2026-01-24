@@ -90,7 +90,7 @@ NCCL automatically utilizes both links without configuration changes.
 
 **Test 5: NCCL Collectives**
 
-The above tests measure raw network performance. Production code uses NCCL, which warrants direct testing with the nccl-tests suite.
+The above tests measure raw network performance. Production code uses NCCL, which warrants direct testing with the nccl-tests suite. See NVIDIA's [NCCL Stacked Sparks playbook](https://build.nvidia.com/spark/nccl/stacked-sparks) for setup instructions.
 
 **Available nccl-tests benchmarks:**
 
@@ -114,16 +114,7 @@ mpirun -np 2 -H 192.168.200.12:1,192.168.200.13:1 \
     $HOME/src/github.com/NVIDIA/nccl-tests/build/all_gather_perf
 ```
 
-**Key indicators from NCCL_DEBUG output:**
-
-| Indicator | What to look for | Status |
-|-----------|------------------|--------|
-| GPU detection | Both ranks show `NVIDIA GB10` | ✓ Both nodes detected |
-| Transport | `NET/IB` with RoCE interfaces | ✓ RDMA active (not TCP fallback) |
-| Channels | `via NET/IB/4`, `via NET/IB/5` | ✓ Multiple RDMA channels |
-| Bandwidth | busbw ~16 GB/s (32 MB), ~22 GB/s (16 GB) | ✓ Expected for dual 100G links |
-
-If NCCL shows `NET/Socket` instead of `NET/IB`, it's falling back to TCP—troubleshooting required.
+**Key indicators from NCCL_DEBUG output:** The output shows `NET/IB` with RoCE interfaces, confirming RDMA is active. Channels appear as `via NET/IB/4` and `via NET/IB/5`, indicating multiple RDMA paths are in use. Bus bandwidth reaches ~16 GB/s for 32 MB messages and ~22 GB/s for 16 GB messages. If `NET/Socket` appears instead of `NET/IB`, NCCL is falling back to TCP—troubleshooting required.
 
 **Large message test (16 GB):**
 
@@ -147,15 +138,6 @@ Result:
 
 With 16 GB messages, busbw reaches ~22 GB/s, demonstrating the full potential of dual 100G RoCE links working together.
 
-**Understanding the output columns:**
-
-- **algbw (Algorithm Bandwidth):** Raw throughput, calculated as message_size / time. This is what the collective operation achieved.
-- **busbw (Bus Bandwidth):** Normalized bandwidth accounting for the algorithm's data movement pattern. For all-gather with N GPUs, busbw = algbw × (N-1). This measures actual link utilization.
-
-For 128MB messages, expect busbw of 10-12 GB/s per 100G link. Values under 5 GB/s suggest RDMA is not being utilized.
-
-Note: Small messages show low bandwidth due to latency dominance. This is expected; bandwidth metrics are meaningful only for messages above 1MB.
-
 ---
 
 ## Implications for LLM Inference
@@ -165,27 +147,6 @@ Note: Small messages show low bandwidth due to latency dominance. This is expect
 **KV-cache management:** Long context windows produce large KV-caches (Key-Value caches). Continuous batching requires frequent cache transfers. Network bandwidth becomes a limiting factor with slow interconnects.
 
 **Disaggregated serving:** Architectures separating prefill and decode phases across nodes require KV-cache transfer between them. RDMA enables microsecond-level transfers; standard Ethernet adds tens of milliseconds to TTFT (Time-To-First-Token).
-
----
-
-## Troubleshooting Notes
-
-**iperf3 port conflict:** "Address already in use" error indicates port 5201 is occupied. Use `-p 5202` to specify an alternate port.
-
-**Interface naming:** The `ib0` interface name is deprecated. Use `ibstat` to verify port status regardless of interface naming conventions.
-
-**iperf3 bandwidth expectations:** 35 Gbps over a 100G link is normal for TCP/IP. This reflects protocol overhead, not hardware limitation. RDMA benchmarks show true hardware capability.
-
----
-
-## Command Reference
-
-| Command | Purpose |
-|---------|---------|
-| `ibstat` | Verify port status (look for "State: Active") |
-| `ib_write_bw` | RDMA bandwidth measurement |
-| `ib_write_lat` | RDMA latency measurement |
-| `iperf3` | TCP bandwidth (for comparison) |
 
 ---
 
