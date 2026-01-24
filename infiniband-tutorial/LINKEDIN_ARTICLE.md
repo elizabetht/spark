@@ -12,9 +12,7 @@ For hands-on benchmarking, see the accompanying [tutorial notebook](https://gith
 
 Traditional networking involves CPU overhead on every packet: interrupt handling, kernel buffer copies, and context switches. At high packet rates, the CPU becomes a bottleneck.
 
-RDMA eliminates this overhead. The network card writes directly to application memory, bypassing the kernel entirely. Measured latency: 1-2 microseconds vs 50-200μs for standard Ethernet. That's a 50-100x improvement.
-
-For multi-GPU inference, this matters. GPUs (Graphics Processing Units) constantly exchange KV-caches and attention states. Network latency directly impacts token generation throughput.
+RDMA eliminates this overhead. The network card writes directly to application memory, bypassing the kernel entirely. For multi-GPU inference—where GPUs constantly exchange KV-caches and attention states—this latency reduction directly impacts token generation throughput.
 
 ## RoCE vs InfiniBand
 
@@ -116,6 +114,8 @@ mpirun -np 2 -H 192.168.200.12:1,192.168.200.13:1 \
     $HOME/src/github.com/NVIDIA/nccl-tests/build/all_gather_perf
 ```
 
+By default, nccl-tests sweeps message sizes from 32 bytes to 32 MB, doubling each iteration. Peak busbw (~16 GB/s) occurs at the largest message size.
+
 **Key indicators from NCCL_DEBUG output:** The output shows `NET/IB` with RoCE interfaces, confirming RDMA is active. Channels appear as `via NET/IB/4` and `via NET/IB/5`, indicating multiple RDMA paths are in use. Bus bandwidth reaches ~16 GB/s for 32 MB messages and ~22 GB/s for 16 GB messages. If `NET/Socket` appears instead of `NET/IB`, NCCL is falling back to TCP—troubleshooting required.
 
 **Large message test (16 GB):**
@@ -142,17 +142,11 @@ With 16 GB messages, busbw reaches ~22 GB/s, demonstrating the full potential of
 
 ---
 
-## Implications on LLM Inference
+## Why RDMA Matters for LLM Inference
 
-Two DGX Spark systems connected via RoCE deliver 22 GB/s bandwidth (3× faster than TCP) and 1-2μs latency (50-100× lower than standard Ethernet).
+Two DGX Spark systems connected via RoCE deliver 22 GB/s bandwidth and 1-2μs latency. For tensor parallelism, this means all-reduce operations add negligible overhead per forward pass—at 200μs per hop, latency would accumulate to milliseconds per token. For disaggregated serving (prefill/decode on separate nodes), RDMA enables microsecond-level KV-cache transfers; standard Ethernet would add tens of milliseconds to TTFT.
 
-For inference workloads, this translates to:
-
-- **Tensor parallelism:** Large models require all-reduce operations every forward pass. At 1-2μs per hop, overhead is negligible. At 200μs, latency accumulates to milliseconds per token.
-- **KV-cache management:** Long context windows require frequent cache transfers. Bandwidth becomes the bottleneck with slow interconnects.
-- **Disaggregated serving:** Prefill/decode separation requires KV-cache transfers between nodes. RDMA enables microsecond-level transfers; standard Ethernet adds tens of milliseconds to TTFT.
-
-The takeaway: RoCE delivers the same RDMA benefits as native InfiniBand for rack-scale deployments. DGX Spark's networking is optimized for multi-GPU inference out of the box.
+The takeaway: RoCE delivers the same RDMA benefits as native InfiniBand for rack-scale deployments.
 
 ---
 
