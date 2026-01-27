@@ -14,6 +14,17 @@
 
 ---
 
+## Tutorials in This Repository
+
+| Tutorial | Description | Format |
+|----------|-------------|--------|
+| [01_InfiniBand_Tutorial.ipynb](01_InfiniBand_Tutorial.ipynb) | Hands-on RDMA benchmarking with code cells | Jupyter Notebook |
+| [02_Multi_Rail_Tutorial.ipynb](02_Multi_Rail_Tutorial.ipynb) | Bonding vs RDMA performance comparison tests | Jupyter Notebook |
+| [02_Multi_Rail_Tutorial.md](02_Multi_Rail_Tutorial.md) | Bonding vs NCCL vs NIXL for dual 100G links | Markdown |
+| [LINKEDIN_ARTICLE.md](LINKEDIN_ARTICLE.md) | Summary article with benchmark results | Markdown |
+
+---
+
 ## What is RDMA?
 
 ### The Simple Explanation
@@ -158,7 +169,9 @@ Imagine you're running a warehouse:
 
 | File | Description |
 |------|-------------|
-| `01_InfiniBand_Tutorial.ipynb` | Interactive notebook with all experiments |
+| `01_InfiniBand_Tutorial.ipynb` | Interactive notebook: RDMA basics, hardware checks, speed tests |
+| `02_NIXL_Multi_Rail_Tutorial.ipynb` | Interactive notebook: Multi-rail configuration and NIXL transfers |
+| `02_NIXL_Multi_Rail_Tutorial.md` | Article: Bonding, NCCL multi-rail, and NIXL for point-to-point |
 | `LINKEDIN_ARTICLE.md` | Summary article for sharing |
 | `README.md` | This file |
 | `agents.md` | Writing guidelines for technical content |
@@ -167,7 +180,9 @@ Imagine you're running a warehouse:
 
 ## Hands-On Experiments
 
-The notebook covers:
+### Tutorial 01: RDMA Basics
+
+The first notebook covers:
 
 1. **Hardware detection** - Verify InfiniBand adapters are recognized
 2. **Link status** - Confirm cables are connected and active
@@ -178,6 +193,18 @@ The notebook covers:
 
 Run the notebook: `01_InfiniBand_Tutorial.ipynb`
 
+### Tutorial 02: Multi-Rail and NIXL
+
+The second notebook covers:
+
+1. **Linux bonding** - Aggregate IPoIB interfaces (TCP/IP traffic only)
+2. **NIXL installation** - NVIDIA Inference Xfer Library setup
+3. **Basic NIXL transfer** - Point-to-point GPU memory transfer
+4. **Multi-rail configuration** - Using both RoCE ports with UCX
+5. **NCCL vs NIXL** - When to use collectives vs point-to-point
+
+Run the notebook: `02_NIXL_Multi_Rail_Tutorial.ipynb`
+
 ---
 
 ## Expected Results Summary
@@ -187,6 +214,8 @@ Run the notebook: `01_InfiniBand_Tutorial.ipynb`
 | `ib_write_bw` | ~12,000 MB/sec (~96 Gbps) | ~24,000 MB/sec (~192 Gbps) | RDMA native |
 | `ib_write_lat` | ~1-2 µs | ~1-2 µs | Latency unchanged |
 | `iperf3` | ~35 Gbps | ~70 Gbps | TCP/IP overhead |
+| NCCL all_gather | N/A | ~22 GB/s busbw | Collectives |
+| NIXL point-to-point | ~12 GB/s | ~22-24 GB/s | Direct transfers |
 
 ---
 
