@@ -1,23 +1,51 @@
 # DGX Spark Dual 100G Links: TCP Bonding vs RDMA
 
-This article compares two approaches to aggregating dual 100G RoCE ports on DGX Spark. The question: how do you use both links for point-to-point transfers?
+## The Challenge
 
-One notable finding: Linux bonding with 4 parallel TCP streams matches RDMA single-link bandwidth (93 Gbps), but single streams remain limited to 34 Gbps. NIXL (NVIDIA Inference Xfer Library) achieves 176 Gbps with dual-rail RDMA.
+DGX Spark systems include two physical 100 Gigabit Ethernet ports running RoCE (RDMA over Converged Ethernet). The hardware supports 200 Gbps aggregate bandwidth. The question: how to utilize both links for point-to-point data transfers?
 
-For collective operations (all-reduce, all-gather), see the [first article](01_Infiniband_Tutorial.md) covering NCCL. This article focuses on point-to-point transfers relevant to disaggregated inference.
+Two approaches exist:
 
-For hands-on benchmarking, see the accompanying [tutorial notebook](02_Multi_Rail_Tutorial.ipynb).
+1. **Linux bonding** - Standard kernel networking that aggregates multiple interfaces into one logical interface
+2. **RDMA (Remote Direct Memory Access)** - Hardware-level data transfers that bypass the operating system kernel
+
+## Measured Performance
+
+Testing between two directly-connected DGX Spark nodes revealed the following throughput characteristics:
+
+| Configuration | Throughput | Description |
+|---------------|------------|-------------|
+| TCP single stream (bonded) | 33.7 Gbps | One connection uses one physical link |
+| TCP 4 parallel streams (bonded) | 93.0 Gbps | Multiple connections distribute across both links |
+| RDMA single link | 93.4 Gbps | Direct hardware access, kernel bypass |
+| NIXL single-rail | 81.8 Gbps | Application-level RDMA with one port |
+| NIXL dual-rail | 93.4 Gbps | Application-level RDMA with both ports |
+
+**Key observation:** Standard TCP networking with bonding requires multiple parallel connections to utilize both links. RDMA achieves similar throughput on a single link by eliminating kernel overhead. NIXL (NVIDIA Inference Xfer Library) provides RDMA capabilities through a Python API.
+
+**Latency characteristics:**
+- TCP: 50-200 microseconds per transfer
+- RDMA hardware: 1-2 microseconds
+- NIXL single-rail: 17.4 microseconds average (Python layer)
+- NIXL dual-rail: 58.6 microseconds average (Python layer)
+
+## Scope
+
+This article documents point-to-point transfer configuration and benchmarks relevant to disaggregated inference architectures where specific node pairs exchange data (prefill sending KV-cache to decode nodes, for example). Collective operations across many nodes (all-reduce, all-gather) are covered in the [first article](01_Infiniband_Tutorial.md) using NCCL (NVIDIA Collective Communications Library). The accompanying [tutorial notebook](02_Multi_Rail_Tutorial.ipynb) provides executable benchmarking code.
+
+**Note on GPU memory:** DGX Spark does not support GPUDirect RDMA due to its unified memory architecture. GPU buffer transfers require host staging through CPU memory. Benchmarks in this article use CPU memory allocation.
 
 ---
 
-## The Problem
+## Configuration Challenge
 
-DGX Spark has two 100G RoCE ports. Running `ib_write_bw` on a single link shows 11,679 MB/sec (93.4 Gbps). How do you use both links for point-to-point transfers?
+DGX Spark provides two 100G RoCE ports. Running `ib_write_bw` on a single link shows 11,679 MB/sec (93.4 Gbps). Two approaches exist for aggregating both links in point-to-point transfers:
 
 | Approach | Traffic Type | Max Throughput | Latency |
-|----------|--------------|----------------|---------||
+|----------|--------------|----------------|---------|
 | Linux bonding | TCP/IP | 34-93 Gbps | 50-200 μs |
-| NIXL | Point-to-point RDMA | ~176 Gbps | 1-2 μs |
+| NIXL single-rail (CPU memory) | Point-to-point RDMA | 81.8 Gbps | 17.4 μs (avg) |
+| NIXL dual-rail (CPU memory) | Point-to-point RDMA | 93.4 Gbps | 58.6 μs (avg) |
 
 The throughput difference comes from the data path. TCP/IP traverses the kernel networking stack with buffer copies, interrupt handling, and context switches. RDMA bypasses the kernel entirely.
 
@@ -55,7 +83,7 @@ For direct-connected DGX Spark systems without a switch, use mode 2 (balance-xor
 
 ### Configuration
 
-**For this tutorial:** Commands were executed on spark-02 only. The configuration is transient (ip commands) and will not persist after reboot.
+**For this tutorial:** Commands were executed on spark-02 only. The configuration is transient (ip commands) and does not persist after reboot.
 
 **MTU 9000 is required:** Default MTU (1500) causes TCP congestion control to throttle connections, resulting in near-zero throughput.
 
@@ -80,7 +108,7 @@ sudo ip link set bond0 mtu 9000
 sudo ip link set bond0 up
 ```
 
-**For production (both nodes):** Replace `192.168.100.11` with `192.168.100.10` on spark-01. Verify with `cat /proc/net/bonding/bond0`.
+**For production (both nodes):** Replace `192.168.100.11` with `192.168.100.10` on spark-01. Configuration can be verified with `cat /proc/net/bonding/bond0`.
 
 ### Bonding Performance
 
@@ -193,7 +221,7 @@ Once the bond is removed and interfaces are up with IP addresses, NIXL memory re
 
 ## NIXL for Point-to-Point Transfers
 
-NIXL handles direct memory transfers between specific node pairs. Where NCCL handles many-to-many collectives, NIXL handles one-to-one transfers.
+NIXL provides direct memory transfers between specific node pairs. NCCL handles many-to-many collectives; NIXL handles one-to-one transfers.
 
 ### Use Cases
 
@@ -205,7 +233,7 @@ Distributed inference involves patterns that do not map to collectives:
 | Tensor shard movement | Moving specific layers between nodes |
 | Disaggregated serving | Separating compute stages across machines |
 
-These are point-to-point transfers. NIXL provides direct RDMA transfers with a unified API for CPU memory, GPU memory, and storage.
+These patterns require point-to-point transfers. NIXL provides direct RDMA transfers with a unified API for CPU memory, GPU memory, and storage.
 
 ### Installation
 
@@ -247,6 +275,8 @@ ucx_info -d | grep -i cuda
 
 Without CUDA-enabled UCX, NIXL will fall back to CPU memory, which still works for the tutorial but limits production GPU-to-GPU transfer performance.
 
+**DGX Spark limitation:** GPUDirect RDMA is not supported on DGX Spark. The platform uses a unified memory architecture where GPU-allocated pinned memory is not coherently accessible to the CPU complex or PCIe devices. As a result, `nvidia-peermem`, dma-buf, and GDRCopy do not work on this platform, and RDMA registration of CUDA buffers fails. UCX provides GPU transfers via `cuda_copy` and `cuda_ipc`, but those paths stage through host memory. RDMA-style transfers require host-pinned buffers allocated with `cudaHostAlloc` and registered with verbs (`ibv_reg_mr`).
+
 ### Architecture
 
 ```
@@ -264,7 +294,7 @@ Without CUDA-enabled UCX, NIXL will fall back to CPU memory, which still works f
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-NIXL abstracts memory types and transfer mechanisms. Register memory once, transfer anywhere.
+NIXL abstracts memory types and transfer mechanisms with single memory registration across transport backends.
 
 ### Target Node (holds source data)
 
@@ -370,6 +400,14 @@ export UCX_TLS=rc_verbs,rc_mlx5
 
 For large transfers, UCX automatically stripes data across both ports.
 
+### Latency Measurement vs Throughput Scripts
+
+The dual-rail throughput scripts measure bulk transfer rates with single multi-gigabyte transfers. This methodology is unsuitable for latency measurement:
+
+- Single large transfer timing reports aggregate bandwidth, not per-transfer latency
+- Large transfers use rendezvous and pipelining, measuring sustained throughput rather than one-way latency
+- Latency measurement requires thousands of small transfers with per-iteration timing and percentile statistics
+
 ---
 
 ## Performance Comparison
@@ -377,20 +415,26 @@ For large transfers, UCX automatically stripes data across both ports.
 **Measured results from DGX Spark testing:**
 
 | Configuration | Throughput | Latency | Notes |
-|---------------|------------|---------|-------||
+|---------------|------------|---------|-------|
 | RDMA single link (`ib_write_bw`) | 93.4 Gbps | 1-2 μs | Kernel bypass, near line rate |
 | TCP single stream (bonded) | 33.7 Gbps | 50-200 μs | One link due to hash policy |
 | TCP 4 parallel streams (bonded) | 93.0 Gbps | 50-200 μs | Distributed across both links |
-| NIXL dual rail | ~176 Gbps | 1-2 μs | Point-to-point RDMA |
+| NIXL single rail (CPU memory) | 81.8 Gbps | 17.4 μs (avg) | Python-based latency test, 4 KB CPU buffers |
+| NIXL dual rail (CPU memory) | 93.4 Gbps | 58.6 μs (avg) | Python-based latency test, 4 KB CPU buffers |
 
 **Key findings:**
 
-1. **RDMA achieves 2.8x the throughput** of single-stream TCP over the same link
+1. **RDMA achieves 2.8x the throughput** of single-stream TCP over the same link (93.4 vs 33.7 Gbps)
 2. **TCP bonding with parallel streams matches RDMA single-link performance** (93 Gbps), but requires application-level parallelism
 3. **Single TCP streams are limited to ~34 Gbps** despite 200 Gbps aggregate capacity
-4. **NIXL dual-rail achieves ~176 Gbps** for point-to-point transfers, nearly 2x TCP bonding
+4. **NIXL dual-rail achieves 93.4 Gbps** for point-to-point transfers with CPU memory, matching RDMA single-link performance
+5. **NIXL single-rail achieves 81.8 Gbps**, slightly lower than dual-rail but with significantly better latency (17.4 vs 58.6 μs average)
 
 The throughput difference comes from the data path. RDMA bypasses kernel TCP/IP stack overhead (system calls, buffer copies, interrupt handling, context switches), achieving both higher bandwidth and 50-100x lower latency.
+
+**Measured NIXL latency (CPU, 4 KB, 1000 iterations):** Avg 58.6 μs, P50 11.1 μs, P95 166.6 μs. These numbers include Python and user-space scheduling overhead and should be used for relative comparison only.
+
+**Single-rail latency (CPU, 4 KB, 1000 iterations):** Avg 17.4 μs, P50 16.2 μs, P95 20.8 μs. Single-rail and dual-rail latency are not interchangeable because transport lanes and wireup paths differ.
 
 ---
 
@@ -411,13 +455,22 @@ Bonding and NIXL are not mutually exclusive. Configure bonding for IP traffic an
 
 ---
 
-## Why This Matters for LLM Inference
+## Disaggregated Inference Implications
 
-For disaggregated inference architectures (prefill and decode on separate nodes), KV-cache transfers are the bottleneck. At 34 Gbps with single-stream TCP, transferring 1 GB of KV-cache takes 235 milliseconds. With NIXL at 176 Gbps, the same transfer completes in 45 milliseconds.
+Disaggregated inference architectures separate prefill and decode stages across nodes, with KV-cache transfers as the primary data movement pattern.
 
-The latency difference (1-2 μs vs 50-200 μs) impacts token-by-token generation. Each decode step requires fetching KV-cache state from the prefill node. At 200 μs per transfer, 100 tokens adds 20 milliseconds to generation time. With RDMA, the overhead drops to 200 μs total.
+**Transfer time for 1 GB KV-cache:**
+- TCP single stream (33.7 Gbps): 237 ms
+- NIXL dual-rail (93.4 Gbps): 86 ms
+- NIXL single-rail (81.8 Gbps): 98 ms
 
-For tensor parallelism across two Spark systems, bonding provides no benefit. NCCL uses RDMA directly. For point-to-point patterns (KV-cache movement, tensor shard transfers), NIXL delivers full RDMA performance.
+**Measured latency characteristics:**
+- TCP: 50-200 μs per transfer
+- RDMA single-link: 1-2 μs
+- NIXL dual-rail (Python, 4 KB): 58.6 μs average
+- NIXL single-rail (Python, 4 KB): 17.4 μs average
+
+For tensor parallelism across two Spark systems, bonding provides no benefit—NCCL uses RDMA directly. Point-to-point patterns (KV-cache movement, tensor shard transfers) achieve full RDMA performance with NIXL.
 
 ---
 
@@ -510,7 +563,7 @@ sudo modprobe nvidia-peermem
 # May fail with: modprobe: ERROR: could not insert 'nvidia_peermem': Invalid argument
 ```
 
-**Workaround:** Use CPU memory fallback in your code:
+**Workaround:** CPU memory fallback:
 ```python
 try:
     tensor = torch.ones((4096, 4096), dtype=torch.float32, device="cuda:0")
@@ -522,7 +575,7 @@ except Exception as e:
     agent.register_memory(tensor)
 ```
 
-UCX `cuda_copy` transport stages GPU data through host memory. Performance is lower than native GPUDirect RDMA but still functional (~140-160 Gbps vs ~180-200 Gbps).
+UCX `cuda_copy` transport stages GPU data through host memory. Performance is lower than native GPUDirect RDMA, though specific benchmarks were not performed on DGX Spark due to GPU registration failures.
 
 ### TCP Throughput Near Zero
 
@@ -582,11 +635,17 @@ If NIXL debug output shows socket-based transport instead of RDMA:
 
 ## Summary
 
-For point-to-point inference data movement on DGX Spark, use NIXL. It achieves full RDMA bandwidth (~176 Gbps with dual rails) and microsecond latency.
+Measured performance on DGX Spark with dual 100G RoCE:
 
-Bonding remains useful for supporting infrastructure: management networks, IP-based storage, and non-RDMA services. The two approaches coexist without conflict.
+- NIXL single-rail RDMA: 81.8 Gbps (CPU memory)
+- NIXL dual-rail RDMA: 93.4 Gbps (CPU memory)
+- TCP bonding with 4 parallel streams: 93.0 Gbps
+- TCP single stream: 33.7 Gbps
+- Latency: RDMA 1-2 μs (hardware), 17.4 μs (NIXL single-rail), 58.6 μs (NIXL dual-rail) vs TCP 50-200 μs
 
-For collective operations (gradient sync, tensor parallelism), see the NCCL coverage in the [first tutorial](01_InfiniBand_Tutorial.ipynb).
+Bonding and RDMA coexist without conflict. Bonding serves management networks, IP-based storage, and non-RDMA services. RDMA (via NIXL or NCCL) provides direct hardware access for point-to-point and collective operations.
+
+Collective operations (gradient sync, tensor parallelism) using NCCL are covered in the [first tutorial](01_InfiniBand_Tutorial.ipynb).
 
 ---
 
