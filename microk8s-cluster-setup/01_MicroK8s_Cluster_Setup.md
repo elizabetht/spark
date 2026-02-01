@@ -125,7 +125,72 @@ microk8s helm3 install gpu-operator nvidia/gpu-operator \
   --set toolkit.enabled=true
 ```
 
-The `driver.enabled=false` flag assumes drivers are already installed on DGX Spark nodes.
+### Why `driver.enabled=false`?
+
+DGX Spark nodes ship with NVIDIA drivers pre-installed on the host OS. The GPU Operator supports two driver deployment modes:
+
+**Mode 1: Containerized Drivers** (`driver.enabled=true`)
+- Operator deploys drivers as privileged pods (`nvidia-driver-daemonset`)
+- Installs/loads kernel modules from inside containers
+- Use when starting with bare nodes without drivers
+
+**Mode 2: Pre-installed Drivers** (`driver.enabled=false`)
+- Operator uses existing host drivers
+- Skips nvidia-driver-daemonset entirely
+- Use when drivers are already installed (DGX Spark case)
+
+Setting `driver.enabled=true` on nodes with existing drivers causes conflicts:
+```
+modprobe: ERROR: could not insert 'nvidia': File exists
+```
+
+Even with `driver.enabled=false`, the operator installs:
+- NVIDIA Container Toolkit (maps GPUs into containers)
+- Device Plugin (exposes `nvidia.com/gpu` to Kubernetes)
+- DCGM Exporter (GPU metrics for Prometheus)  
+- GPU Feature Discovery (automatic node labeling)
+
+Verify pre-installed drivers on your nodes:
+```bash
+nvidia-smi           # Should show GPU details
+ls /dev/nvidia*      # Should list GPU device files
+modinfo nvidia       # Should show loaded driver module
+```
+
+### Runtime Configuration: The "nvidia" vs "nvidia-container-runtime" Issue
+
+**Problem:** GPU Operator pods stuck in `Init:0/1` status for extended periods.
+
+**Root Cause:** The GPU Operator expects a containerd runtime named `nvidia`, but MicroK8s on DGX Spark systems configures a runtime named `nvidia-container-runtime`. This naming mismatch prevents init containers from validating GPU availability.
+
+**Diagnosis:**
+```bash
+# Check containerd configuration on GPU nodes
+sudo grep -A 3 'runtimes.nvidia' /var/snap/microk8s/current/args/containerd-template.toml
+
+# Problematic output shows:
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia-container-runtime]
+  runtime_type = "io.containerd.runc.v2"
+  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia-container-runtime.options]
+    BinaryName = "nvidia-container-runtime"
+
+# GPU Operator init containers look for "nvidia", not "nvidia-container-runtime"
+```
+
+**Solution:** Add a `nvidia` runtime entry alongside the existing `nvidia-container-runtime` config:
+
+```bash
+# Add this to /var/snap/microk8s/current/args/containerd-template.toml
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia]
+  runtime_type = "io.containerd.runc.v2"
+  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia.options]
+    BinaryName = "/usr/bin/nvidia-container-runtime"
+
+# Then restart containerd
+sudo snap restart microk8s.daemon-containerd
+```
+
+Both runtime names can coexist. The existing `nvidia-container-runtime` configuration remains functional, and the new `nvidia` entry provides GPU Operator compatibility. After restarting containerd, init containers validate successfully and pods reach Running state.
 
 ## Distributed Inference with Tensor Parallelism
 
