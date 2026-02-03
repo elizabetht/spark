@@ -19,9 +19,7 @@
 | Tutorial | Description | Format |
 |----------|-------------|--------|
 | [01_InfiniBand_Tutorial.ipynb](01_InfiniBand_Tutorial.ipynb) | Hands-on RDMA benchmarking with code cells | Jupyter Notebook |
-| [02_Multi_Rail_Tutorial.ipynb](02_Multi_Rail_Tutorial.ipynb) | Bonding vs RDMA performance comparison tests | Jupyter Notebook |
-| [02_Multi_Rail_Tutorial.md](02_Multi_Rail_Tutorial.md) | Bonding vs NCCL vs NIXL for dual 100G links | Markdown |
-| [LINKEDIN_ARTICLE.md](LINKEDIN_ARTICLE.md) | Summary article with benchmark results | Markdown |
+| [02_Multi_Rail_Tutorial.ipynb](02_Multi_Rail_Tutorial.ipynb) | Bonding vs NIXL RDMA performance comparison tests | Jupyter Notebook |
 
 ---
 

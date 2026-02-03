@@ -2,30 +2,83 @@
 
 This document provides instructions for AI agents working on this repository. The goal is to maintain a professional, technical tone and ensure content is accessible to the target audience.
 
+> **Reference**: See [README.md](README.md) for architecture diagrams, learning modules, and hardware setup details.
+
+---
+
+## Core Philosophy
+
+> Build understanding progressively. No magic abstractions. Understand the "why" before the "how".
+
+When helping with this project:
+1. **Map ML concepts to systems concepts** (e.g., "KV cache is like a session cache in web servers")
+2. **Start with working minimal code**, then add complexity incrementally
+3. **Explain distributed systems aspects deeply**, this is the target audience's strength
+4. **Demystify ML jargon** with plain systems engineering language
+5. **Establish baselines before showing optimizations**, you cannot appreciate "after" without "before"
+
+---
+
+## Baseline Comparison Pedagogy
+
+> You cannot appreciate an optimization without seeing what you're optimizing from.
+
+### Why Baselines Matter
+
+This is how systems engineers evaluate any infrastructure change:
+- "We added RDMA → 10x faster than TCP"
+- "We used NIXL multi-rail → 176 Gbps vs 96 Gbps single-rail"
+- "We implemented KV-aware routing → 2x cache hit rate"
+
+### Making the Baseline Fair
+
+To ensure honest comparison, the baseline should be the *best you can do* without the optimization:
+- Use proper MTU settings (not default 1500)
+- Use appropriate GID index for RoCE (not link-local)
+- Tune buffer sizes appropriately
+
+This way, when the optimization wins, it's because of **architectural advantages**, not because the baseline was poorly configured.
+
 ---
 
 ## Project Overview
 
-**DGX Spark Network Benchmarks** is a LinkedIn article documenting RDMA (Remote Direct Memory Access) performance testing between two direct-connected DGX Spark systems using RoCE (RDMA over Converged Ethernet).
+**DGX Spark Network Benchmarks** documents RDMA (Remote Direct Memory Access) performance testing between two direct-connected DGX Spark systems using RoCE (RDMA over Converged Ethernet).
 
 ### Content Focus
 - RDMA vs TCP/IP performance comparison
 - RoCE vs native InfiniBand clarification
-- NCCL collective benchmarks
+- NIXL multi-rail benchmarks
 - Practical implications for LLM inference
 
 ### Project Structure
 ```
-infiniband-tutorial/
-├── LINKEDIN_ARTICLE.md    # Main article content
-├── 01_InfiniBand_Tutorial.ipynb  # Hands-on notebook
-├── README.md              # Repository overview
+spark/
+├── infiniband-tutorial/
+│   ├── 01_InfiniBand_Tutorial.ipynb  # RDMA basics, single-link benchmarks
+│   ├── 02_Multi_Rail_Tutorial.ipynb  # Bonding vs NIXL comparison
+│   └── README.md
+├── microk8s-cluster-setup/
+│   └── 01_MicroK8s_Cluster_Setup.ipynb
 └── agents.md              # This file (AI guidelines)
 ```
 
 ---
 
-## 🎯 Target Audience
+## Learner Profile
+
+**Background**: Systems engineering (not ML expert)
+
+**Existing Knowledge**:
+- LLM serving basics
+- KV cache fundamentals
+- Strong in: distributed systems, networking, infrastructure
+
+**Learning Style**: Build progressively, understand each component before moving to the next.
+
+---
+
+## Target Audience
 
 ### Who We're Writing For
 
@@ -51,7 +104,28 @@ They are:
 
 ---
 
-## ✍️ Writing Style Guidelines
+## Concept Mappings
+
+When explaining RDMA and networking components, use these systems engineering equivalents:
+
+| Concept | Systems Engineering Equivalent |
+|---------|--------------------------------|
+| RDMA | DMA but across network (NIC writes directly to remote memory) |
+| RoCE | RDMA running over standard Ethernet instead of InfiniBand fabric |
+| Verbs API | Low-level interface to RDMA hardware (like raw sockets for TCP) |
+| Queue Pair (QP) | Bidirectional communication channel (like a TCP connection) |
+| GID | Global Identifier, like an IP address for RDMA endpoints |
+| MTU | Maximum payload per packet (jumbo frames = 9000 bytes) |
+| NIXL | NVIDIA's library for point-to-point RDMA transfers |
+| UCX | Unified Communication X, transport abstraction layer |
+| NCCL | Collective operations library (all-reduce, all-gather) |
+| KV Cache | In-memory cache per request (like Redis session storage) |
+| Prefill Phase | Request parsing + cache warmup (CPU/memory intensive) |
+| Decode Phase | Response generation, streaming (latency-sensitive) |
+
+---
+
+## Writing Style Guidelines
 
 ### 1. Lead with Data, Not Claims
 
@@ -127,7 +201,7 @@ Uncertainty stated clearly is more credible than false confidence.
 
 ---
 
-## 🔧 Formatting Conventions
+## Formatting Conventions
 
 ### Numbers and Units
 
@@ -155,7 +229,7 @@ Use tables when comparing more than 2 items on more than 2 dimensions. Otherwise
 
 ---
 
-## 🚫 Anti-Patterns to Avoid
+## Anti-Patterns to Avoid
 
 | Anti-Pattern | Why It Fails | Fix |
 |--------------|--------------|-----|
@@ -169,7 +243,7 @@ Use tables when comparing more than 2 items on more than 2 dimensions. Otherwise
 
 ---
 
-## 🎨 Tone Guidelines
+## Tone Guidelines
 
 **Voice:** Professional and technical. Write for engineers and technical leadership.
 
@@ -202,7 +276,7 @@ After (professional):
 
 ---
 
-## 📝 Acronym Usage
+## Acronym Usage
 
 **Expand acronyms on first use.** The first time an acronym appears, include the full term in parentheses.
 
@@ -217,7 +291,7 @@ After the first expansion, use the acronym alone. This respects readers who know
 
 ---
 
-## 📋 Checklist Before Publishing
+## Checklist Before Publishing
 
 - [ ] Does the opening sentence contain actual information?
 - [ ] Are all claims backed by specific data or commands?
@@ -230,7 +304,7 @@ After the first expansion, use the acronym alone. This respects readers who know
 
 ---
 
-## 💡 Example Transformation
+## Example Transformation
 
 **Before (AI-sounding):**
 > InfiniBand technology represents a paradigm shift in high-performance computing infrastructure. By leveraging RDMA capabilities, organizations can achieve unprecedented levels of performance that were previously thought impossible. This article will walk you through the transformative journey of implementing InfiniBand in your AI infrastructure.
