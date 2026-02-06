@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-02-04T18:07:23.159361",
+  "timestamp": "2026-02-05T18:06:29.961537",
   "hostname": "spark-01",
   "gpus": {
     "count": 1,
@@ -44,7 +44,7 @@
     ]
   },
   "model": {
-    "name": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+    "name": "meta-llama/Llama-3.1-8B-Instruct",
     "cache_dir": "/home/nvidia/.cache/huggingface/hub"
   }
 }

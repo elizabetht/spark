@@ -1,20 +1,20 @@
 {
-  "timestamp": "2026-02-04T23:26:15.052721",
+  "timestamp": "2026-02-05T22:53:23.380612",
   "model": "meta-llama/Llama-3.1-8B-Instruct",
   "config": {
     "tensor_parallel_size": 1,
-    "gpu_memory_utilization": 0.9
+    "gpu_memory_utilization": 0.3
   },
   "single_request": {
-    "latency_ms": 6916.283130645752,
+    "latency_ms": 6874.111652374268,
     "tokens": 200,
-    "throughput_tokens_per_sec": 14.458633070833136
+    "throughput_tokens_per_sec": 14.547334267615618
   },
   "batch_processing": {
     "batch_size": 8,
     "total_tokens": 800,
-    "throughput_tokens_per_sec": 120.63406235817034,
-    "avg_latency_ms": 828.9532661437988
+    "throughput_tokens_per_sec": 122.45442751503955,
+    "avg_latency_ms": 816.6303336620331
   },
   "memory": {
     "baseline_mb": 0,

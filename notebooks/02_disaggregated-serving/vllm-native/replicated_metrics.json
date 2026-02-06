@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-02-06T08:39:45.112324",
+  "model": "meta-llama/Llama-3.1-8B-Instruct",
+  "config": {
+    "num_instances": 2,
+    "gpu_memory_utilization": 0.3,
+    "routing": "round-robin",
+    "kv_transfer": "none"
+  },
+  "single_request": {
+    "latency_ms": 7303.8318157196045,
+    "tokens": 100,
+    "throughput_tokens_per_sec": 13.691443412590077
+  },
+  "batch_processing": {
+    "batch_size": 8,
+    "total_tokens": 800,
+    "throughput_tokens_per_sec": 26.478589715154996,
+    "avg_latency_ms": 18632.520228624344
+  }
+}
