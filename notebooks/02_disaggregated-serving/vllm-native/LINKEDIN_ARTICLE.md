@@ -22,25 +22,25 @@ The replicated baseline is the comparison most benchmarks skip. Two GPUs running
 
 ## The Results
 
-### Single Request Latency
+### Single Request Performance
 
-| Architecture | Latency | Throughput | Overhead vs Baseline |
-|-------------|---------|------------|---------------------|
+| Architecture | Latency | Throughput | Throughput vs Baseline |
+|-------------|---------|------------|----------------------|
 | Single node | 6,874 ms | 14.5 tok/s | — |
-| Replicated | 7,304 ms | 13.7 tok/s | +6.3% |
-| Disaggregated | 8,925 ms | 11.2 tok/s | +29.2% |
+| Replicated | 7,304 ms | 13.7 tok/s | 0.94x |
+| Disaggregated | 8,925 ms | 11.2 tok/s | 0.77x |
 
 For a single request, disaggregation is the slowest option. This makes sense: the request passes through the proxy to the prefill node, the KV cache transfers over RDMA to the decode node, and only then does token generation begin. Two network hops with no offsetting parallelism.
 
 Replication adds minimal overhead (6.3%), which is the cost of the proxy forwarding the request.
 
-### Batch Throughput (8 Concurrent Requests)
+### Batch Performance (8 Concurrent Requests)
 
-| Architecture | Throughput | Avg Latency | Total Time |
-|-------------|-----------|-------------|------------|
+| Architecture | Throughput | Avg Latency | Throughput vs Baseline |
+|-------------|-----------|-------------|----------------------|
 | Single node | 122.5 tok/s | 817 ms | — |
-| Replicated | 26.5 tok/s | 18,633 ms | 30.2 s |
-| Disaggregated | 101.9 tok/s | 7,782 ms | 7.9 s |
+| Replicated | 26.5 tok/s | 18,633 ms | 0.22x |
+| Disaggregated | 101.9 tok/s | 7,782 ms | 0.83x |
 
 Under concurrent load, the story changes. Disaggregated serving delivered 101.9 tok/s, reaching 83% of the single-node throughput, while the replicated setup struggled at 26.5 tok/s.
 
