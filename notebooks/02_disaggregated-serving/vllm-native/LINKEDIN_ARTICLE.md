@@ -99,6 +99,17 @@ Each notebook produces metrics that feed into the next. The progression is inten
 
 The full source is on GitHub: [github.com/elizabetht/spark](https://github.com/elizabetht/spark)
 
+## What's Next in This Series
+
+This article covers Part 1: understanding disaggregated serving from first principles with vLLM and NIXL. The following installments will build on this foundation:
+
+**Part 2: Production Benchmarking with guidellm / vllm bench** — The manual benchmarks in this series are designed for learning, not for production evaluation. The next installment will run the same three configurations (single node, replicated, disaggregated) through standardized benchmarking tools. Expect TTFT, TPOT, P50/P95/P99 percentile distributions, and load sweeps across varying request rates.
+
+**Part 3: Disaggregated Serving with SGLang** — vLLM is not the only engine supporting prefill/decode disaggregation. SGLang implements a different approach to KV cache management and transfer. Running the same benchmarks on the same hardware with a different engine reveals which performance characteristics are architectural and which are engine-specific.
+
+**Part 4: AI Dynamo, the Hard Way** — AI Dynamo adds KV-aware routing, dynamic scaling, and service discovery on top of disaggregated serving. Instead of deploying it as a black box, this installment will build up each layer manually: etcd for service registry, the planner for autoscaling decisions, and the KV-aware router. The goal is to understand what each component does before trusting the orchestration to handle it.
+
+**Part 5: MicroK8s Cluster Deployment** — Moving from bare-metal SSH commands to Kubernetes-orchestrated inference. Deploy vLLM workers as pods, expose RDMA devices through the container runtime, and manage the prefill/decode topology through Kubernetes-native tooling.
 ---
 
 *Built on two NVIDIA DGX Spark systems connected via RoCE. Model: Llama-3.1-8B-Instruct. Inference engine: vLLM 0.13.0 (cu130). KV transfer: NIXL over RDMA.*
