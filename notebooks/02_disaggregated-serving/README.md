@@ -33,6 +33,10 @@ Run two independent vLLM instances (one per node, 0.3 `gpu-memory-utilization` e
 Run prefill on spark-01 and decode on spark-02 using vLLM's `NixlConnector` for GPU-to-GPU KV cache transfer over RDMA. Compare against both the single-node baseline (Module 01) and replicated baseline (Module 03).
 **Time**: 45-60 minutes
 
+### Module 05: [Production Benchmarking](vllm-native/05_Production_Benchmarking.ipynb)
+Run [guidellm](https://github.com/vllm-project/guidellm) sweeps against all three configurations (single node, replicated, disaggregated). Produces TTFT/TPOT/ITL breakdowns, P50/P95/P99 distributions, load-vs-latency curves, and HTML reports.
+**Time**: 60-90 minutes (three sequential benchmark phases)
+
 ## What Comes Next: AI Dynamo
 
 These notebooks cover the manual approach: two vLLM instances, a proxy, and NixlConnector. This is enough to understand what disaggregated serving does and measure its overhead.
@@ -63,4 +67,4 @@ cd notebooks/02_disaggregated-serving/vllm-native
 jupyter notebook 00_Environment_Setup.ipynb
 ```
 
-Work through notebooks in order: 00 → 01 → 02 → 03 → 04.
+Work through notebooks in order: 00 → 01 → 02 → 03 → 04 → 05.
